@@ -6,7 +6,8 @@ import 'package:http/http.dart' as http;
 import '../constants/api_constants.dart';
 import '../models/login_response_model.dart';
 import '../models/menu_model.dart';
-import '../models/mumin_due_model.dart';
+import '../models/mumin_fmb_details_model.dart';
+import '../models/external_receipt_model.dart';
 import '../models/package_model.dart';
 import '../models/payment_model.dart';
 import '../models/user_model.dart';
@@ -625,24 +626,48 @@ class ApiManager {
   }
 
   // ══════════════════════════════════════════════════════════════════════════
-  // MUMIN DUE (external GetMuminDue, proxied by backend)
+  // MUMIN FMB (DueStatus GetMuminDetailsByITSFMB + receipts, proxied)
   // ══════════════════════════════════════════════════════════════════════════
 
-  /// GET /mumin-due/me
-  ///
-  /// Returns the latest Takhmin & Due (by Misri-year Laagat) for the logged-in
-  /// account's sabil. Returns `null` when no Sabil number is set (404) so callers
-  /// can fall back to the internal takhmin source.
-  static Future<MuminDueModel?> getMuminDueMe({required String token}) async {
-    final url = ApiConstants.muminDueMe;
-    _logRequest('GET MUMIN DUE ME', url);
+  /// GET /mumin-fmb/me — Takhmin, Due, profile; backend syncs sabil/name/phone.
+  static Future<MuminFmbDetailsModel?> getMuminFmbMe({
+    required String token,
+  }) async {
+    final url = ApiConstants.muminFmbMe;
+    _logRequest('GET MUMIN FMB ME', url);
 
     final res = await _authorizedGet(uri: Uri.parse(url), token: token);
 
-    _log('GET MUMIN DUE ME', res);
+    _log('GET MUMIN FMB ME', res);
     if (res.statusCode == 404) return null;
     _checkStatus(res);
-    return MuminDueModel.fromJson(_decodedDataMap(res));
+    return MuminFmbDetailsModel.fromJson(_decodedDataMap(res));
+  }
+
+  /// GET /mumin-fmb/me/receipts — DueStatus receipt history for the logged-in user.
+  static Future<List<ExternalReceiptModel>> getMuminFmbReceipts({
+    required String token,
+  }) async {
+    final url = ApiConstants.muminFmbMeReceipts;
+    _logRequest('GET MUMIN FMB RECEIPTS', url);
+
+    final res = await _authorizedGet(uri: Uri.parse(url), token: token);
+
+    _log('GET MUMIN FMB RECEIPTS', res);
+    if (res.statusCode == 404) return [];
+    _checkStatus(res);
+    final data = _decodedDataMap(res);
+    final list = data['receipts'];
+    if (list is! List) return [];
+    return list
+        .whereType<Map<String, dynamic>>()
+        .map(ExternalReceiptModel.fromJson)
+        .toList();
+  }
+
+  /// @deprecated Use [getMuminFmbMe].
+  static Future<MuminFmbDetailsModel?> getMuminDueMe({required String token}) {
+    return getMuminFmbMe(token: token);
   }
 
   /// GET /thali/me/pauses

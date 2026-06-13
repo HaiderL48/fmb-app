@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import '../apis/api_manager.dart' show ApiException, ApiManager;
 import '../models/menu_model.dart';
-import '../models/mumin_due_model.dart';
+import '../models/mumin_fmb_details_model.dart';
 import '../models/package_model.dart';
 import '../models/payment_model.dart';
 import '../models/thali_pause_model.dart';
@@ -173,34 +173,38 @@ class HomeProvider with ChangeNotifier {
         '[HomeProvider] User package: ${_userPackage?.name ?? "none"}',
       );*/
 
-      // ── Payments ──────────────────────────────────────────────────────────
-      final receipts = await ApiManager.getPaymentReceipts(token: token);
-      /* debugPrint(
-        '[HomeProvider] Payment receipts received: ${receipts.length} items',
-      );*/
-      final userReceipts =
-          receipts.where((p) => p.userId == (user?.id ?? '')).toList()
-            ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
-      _recentPayments = userReceipts;
-      _totalPaidKd = userReceipts
-          .where((p) => p.status == PaymentStatus.completed)
-          .fold(0, (sum, p) => sum + p.amountKd);
-      /* debugPrint(
-        '[HomeProvider] User payments: ${userReceipts.length} items, total paid: $_totalPaidKd KD',
-      );*/
-
-      // ── Payment progress: prefer external Mumin Due (Takhmin + Due), else
-      //    fall back to the internal takhmin history. ──────────────────────────
+      // ── Payment progress: DueStatus Mumin profile (Takhmin + Due) ───────────
       try {
-        final due = await ApiManager.getMuminDueMe(token: token);
-        if (due != null && due.hasDue) {
-          _applyMuminDue(due);
+        final details = await ApiManager.getMuminFmbMe(token: token);
+        if (details != null && details.hasDetails) {
+          _applyMuminFmbDetails(details);
         } else {
           await _loadTakhminProgressFallback(token);
         }
       } catch (_) {
-        // debugPrint('[HomeProvider] Mumin Due skipped — using takhmin history');
         await _loadTakhminProgressFallback(token);
+      }
+
+      // ── Recent payments: DueStatus receipt history ─────────────────────────
+      try {
+        final externalReceipts = await ApiManager.getMuminFmbReceipts(
+          token: token,
+        );
+        final uid = user?.id ?? '';
+        _recentPayments = externalReceipts
+            .map((r) => r.toPaymentModel(userId: uid))
+            .toList()
+          ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+        _totalPaidKd = _recentPayments.fold(0, (sum, p) => sum + p.amountKd);
+      } catch (_) {
+        final receipts = await ApiManager.getPaymentReceipts(token: token);
+        final userReceipts =
+            receipts.where((p) => p.userId == (user?.id ?? '')).toList()
+              ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
+        _recentPayments = userReceipts;
+        _totalPaidKd = userReceipts
+            .where((p) => p.status == PaymentStatus.completed)
+            .fold(0, (sum, p) => sum + p.amountKd);
       }
 
       // ── Weekly menus ──────────────────────────────────────────────────────
@@ -366,12 +370,11 @@ class HomeProvider with ChangeNotifier {
     }
   }
 
-  /// Drives the Home payment-progress card from the external Mumin Due record:
-  /// Takhmin = takhmeen, Remaining = due, Paid = takhmeen - due (clamped).
-  void _applyMuminDue(MuminDueModel due) {
-    _progressMisriYear = due.misriYear;
-    final total = due.takhmeenKd ?? 0;
-    final remaining = due.dueKd ?? 0;
+  /// Drives the Home payment-progress card from DueStatus Mumin profile.
+  void _applyMuminFmbDetails(MuminFmbDetailsModel details) {
+    _progressMisriYear = details.misriYear;
+    final total = details.takhmeenKd ?? 0;
+    final remaining = details.dueKd ?? 0;
     _progressTotalKd = total < 0 ? 0 : total;
     _progressRemainingKd = remaining < 0 ? 0 : remaining;
     var paid = _progressTotalKd - _progressRemainingKd;

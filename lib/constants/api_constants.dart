@@ -23,8 +23,13 @@ class ApiConstants {
   static String userById(String id) => '$baseUrl/users/$id';
   static const String usersImport = '$baseUrl/users/import';
 
-  // ─── Mumin Due (external GetMuminDue, proxied by our backend) ───────────────
-  /// GET /mumin-due/me — latest Takhmin & Due for the logged-in account's sabil.
+  // ─── Mumin FMB (DueStatus GetMuminDetailsByITSFMB + receipts) ─────────────
+  /// GET /mumin-fmb/me — profile, Takhmin & Due; syncs user fields server-side.
+  static const String muminFmbMe = '$baseUrl/mumin-fmb/me';
+  /// GET /mumin-fmb/me/receipts — receipt history from DueStatus.
+  static const String muminFmbMeReceipts = '$baseUrl/mumin-fmb/me/receipts';
+
+  // Legacy (admin sabil/year lookup — still used for year-specific sync)
   static const String muminDueMe = '$baseUrl/mumin-due/me';
 
   // ─── Takhmin ──────────────────────────────────────────────────────────────

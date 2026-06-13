@@ -57,30 +57,31 @@ class PaymentsProvider with ChangeNotifier {
     if (_isLoading) return;
     _setLoading(true);
     _errorMessage = null;
-    if (misriYear == null) {
-      /* debugPrint(
-        '[PaymentsProvider] misriYear was null — using calendar year as fallback; '
-        'pass Misri year from takhmin/home for correct eligibility.',
-      );
-    }*/
-      _misriYear = misriYear ?? DateTime.now().year;
-      /* debugPrint(
-      '[PaymentsProvider] Loading payments for Misri year: $_misriYear',
-    );*/
-    }
+    _misriYear = misriYear ?? DateTime.now().year;
 
     try {
+      final userId = user?.id ?? '';
+      List<PaymentModel> allReceipts;
+      try {
+        final external = await ApiManager.getMuminFmbReceipts(token: token);
+        allReceipts = external
+            .map((r) => r.toPaymentModel(userId: userId))
+            .toList();
+      } catch (_) {
+        allReceipts = await ApiManager.getPaymentReceipts(
+          token: token,
+          misriYear: _misriYear,
+        );
+      }
+
       final results = await Future.wait<dynamic>([
-        ApiManager.getPaymentReceipts(token: token, misriYear: _misriYear),
         ApiManager.getPaymentSummary(token: token, misriYear: _misriYear),
         ApiManager.getPaymentEligibleUsers(token: token, misriYear: _misriYear),
       ]);
 
-      final allReceipts = results[0] as List<PaymentModel>;
-      final summary = results[1] as Map<String, dynamic>;
-      final eligibleUsers = results[2] as List<UserModel>;
+      final summary = results[0] as Map<String, dynamic>;
+      final eligibleUsers = results[1] as List<UserModel>;
 
-      final userId = user?.id ?? '';
       _receipts = allReceipts.where((p) => p.userId == userId).toList()
         ..sort((a, b) => b.receivedAt.compareTo(a.receivedAt));
 
